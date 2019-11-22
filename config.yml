@@ -1,0 +1,19 @@
+# Server configuration
+server:
+  host: "192.168.1.1"
+  port: 51820
+  dns: "1.1.1.1"
+  allowedIPs: "10.0.0.0/20"
+
+# API configuration
+api:
+  host: "https://example.net"
+  user: "foo"
+  pass: "bar"
+  basic_user: "john"
+  basic_pass: "doh"
+
+# API endpoints
+api_endpoints:
+  session_create: "/api/session/create"
+  keypair_list: "/api/keypair/list"
