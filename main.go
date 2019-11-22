@@ -30,7 +30,7 @@ Options:
 var validate *validator.Validate
 
 // Version of this program
-var Version = "v0.1-dev"
+var version = "v0.1-dev"
 
 // Auth struct for login response
 type Auth struct {
@@ -67,55 +67,13 @@ type Keys []struct {
 	UserID    string `json:"userID" validate:"required,printascii"`
 	PublicKey string `json:"publicKey" validate:"required,printascii,len=44"`
 	IPAddr    string `json:"ipaddr" validate:"required,ipv4"`
+	Caption   string `json:"caption" validate:"printascii,max=50"`
 }
 
 // basicAuth returns the base64 encoded string of user and pass
 func basicAuth(user, pass string) string {
 	auth := user + ":" + pass
 	return base64.StdEncoding.EncodeToString([]byte(auth))
-}
-
-// keypairList requests all wireguard public keys from the API
-func keypairList(cfg *Config, headers map[string]string, sid string) *Keys {
-	// Variable for the Keys struct
-	var keys Keys
-
-	// URL Buildings
-	baseURL := cfg.API.Host + cfg.APIEndpoints.KeypairList
-
-	// GET collection
-	method := rest.Get
-
-	queryParams := make(map[string]string)
-	queryParams["sid"] = sid
-
-	request := rest.Request{
-		Method:      method,
-		BaseURL:     baseURL,
-		Headers:     headers,
-		QueryParams: queryParams,
-	}
-
-	response, err := rest.Send(request)
-	if err != nil {
-		log.Fatalf("ERROR: API request failed: %s", err)
-	}
-	//fmt.Println(response.StatusCode)
-	//fmt.Println(response.Body)
-	//fmt.Println(response.Headers)
-
-	err = json.Unmarshal([]byte(response.Body), &keys)
-	if err != nil {
-		log.Fatalf("ERROR: Response body can not be unmarshalled: %s", err)
-	}
-	for _, v := range keys {
-		err = validate.Struct(v)
-		if err != nil {
-			log.Fatalf("ERROR: Input API validation error: %s", err)
-		}
-	}
-
-	return &keys
 }
 
 // createSession calls the login API process to authenticate and requests the
@@ -161,11 +119,74 @@ func createSession(cfg *Config, headers map[string]string) *Auth {
 	return &k
 }
 
+// createWgConfig builds the configuration string
+func createWgConfig(cfg *Config, keys *Keys) string {
+	buf := bytes.Buffer{}
+	buf.WriteString("[Interface]\n")
+	buf.WriteString("Address = " + cfg.Server.Host + "\n")
+	buf.WriteString("ListenPort = " + string(cfg.Server.Port) + "\n")
+	buf.WriteString("PrivateKey = FILLME\n\n")
+
+	for _, v := range *keys {
+		buf.WriteString("[Peer]\n")
+		buf.WriteString("# " + v.UserID + " (" + v.Caption + ")\n")
+		buf.WriteString("PublicKey = " + v.PublicKey + "\n")
+		buf.WriteString("AllowedIPs = " + cfg.Server.DNS + "\n\n")
+	}
+
+	return buf.String()
+}
+
+// keypairList requests all wireguard public keys from the API
+func keypairList(cfg *Config, headers map[string]string, sid string) *Keys {
+	// Variable for the Keys struct
+	var keys Keys
+
+	// URL Buildings
+	baseURL := cfg.API.Host + cfg.APIEndpoints.KeypairList
+
+	// GET collection
+	method := rest.Get
+
+	queryParams := make(map[string]string)
+	queryParams["sid"] = sid
+
+	request := rest.Request{
+		Method:      method,
+		BaseURL:     baseURL,
+		Headers:     headers,
+		QueryParams: queryParams,
+	}
+
+	response, err := rest.Send(request)
+	if err != nil {
+		log.Fatalf("ERROR: API request failed: %s", err)
+	}
+	//fmt.Println(response.StatusCode)
+	//fmt.Println(response.Body)
+	//fmt.Println(response.Headers)
+
+	err = json.Unmarshal([]byte(response.Body), &keys)
+	if err != nil {
+		log.Fatalf("ERROR: Response body can not be unmarshalled: %s", err)
+	}
+	for _, v := range keys {
+		err = validate.Struct(v)
+		if err != nil {
+			log.Fatalf("ERROR: Input API validation error: %s", err)
+		}
+	}
+
+	return &keys
+}
+
+// pathExists checks if the given file exists
 func pathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// readConfig reads the yaml config from given path
 func readConfig(cfg *Config, config string) {
 	if pathExists(config) {
 		// Open the config file
@@ -189,6 +210,7 @@ func readConfig(cfg *Config, config string) {
 	}
 }
 
+// writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(wgConfig string, wgConfigContent string) {
 	if pathExists(wgConfig) {
 		err := os.Remove(wgConfig)
@@ -207,23 +229,6 @@ func writeWgConfig(wgConfig string, wgConfigContent string) {
 		_, err = fmt.Fprintf(w, "%s", wgConfigContent)
 		w.Flush()
 	}
-}
-
-func createWgConfig(cfg *Config, keys *Keys) string {
-	buf := bytes.Buffer{}
-	buf.WriteString("[Interface]\n")
-	buf.WriteString("Address = " + cfg.Server.Host + "\n")
-	buf.WriteString("ListenPort = " + string(cfg.Server.Port) + "\n")
-	buf.WriteString("PrivateKey = FILLME\n\n")
-
-	for _, v := range *keys {
-		buf.WriteString("[Peer]\n")
-		buf.WriteString("# " + v.UserID + "\n")
-		buf.WriteString("PublicKey = " + v.PublicKey + "\n")
-		buf.WriteString("AllowedIPs = " + cfg.Server.DNS + "\n\n")
-	}
-
-	return buf.String()
 }
 
 func main() {
@@ -245,7 +250,7 @@ func main() {
 		return
 	}
 	if *versionFlag {
-		fmt.Println(Version)
+		fmt.Println(version)
 		return
 	}
 	// Read config arguments
