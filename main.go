@@ -125,7 +125,8 @@ func createWgConfig(cfg *Config, keys *Keys) string {
 	buf.WriteString("[Interface]\n")
 	buf.WriteString("Address = " + cfg.Server.Host + "\n")
 	buf.WriteString("ListenPort = " + string(cfg.Server.Port) + "\n")
-	buf.WriteString("PrivateKey = FILLME\n\n")
+	buf.WriteString("PrivateKey = FILLME\n")
+	buf.WriteString("SaveConfig = true\n\n")
 
 	for _, v := range *keys {
 		buf.WriteString("[Peer]\n")
