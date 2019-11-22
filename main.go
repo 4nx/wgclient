@@ -66,8 +66,8 @@ type Keys []struct {
 	ID        string `json:"_id" validate:"required,hexadecimal,len=24"`
 	UserID    string `json:"userID" validate:"required,printascii"`
 	PublicKey string `json:"publicKey" validate:"required,printascii,len=44"`
-	IPAddr    string `json:"ipaddr" validate:"required,ipv4"`
 	Caption   string `json:"caption" validate:"printascii,max=50"`
+	IPAddr    string `json:"ipAddr" validate:"required,ipv4"`
 }
 
 // basicAuth returns the base64 encoded string of user and pass
@@ -131,7 +131,7 @@ func createWgConfig(cfg *Config, keys *Keys) string {
 		buf.WriteString("[Peer]\n")
 		buf.WriteString("# " + v.UserID + " (" + v.Caption + ")\n")
 		buf.WriteString("PublicKey = " + v.PublicKey + "\n")
-		buf.WriteString("AllowedIPs = " + cfg.Server.DNS + "\n\n")
+		buf.WriteString("AllowedIPs = " + v.IPAddr + "/32\n\n")
 	}
 
 	return buf.String()
