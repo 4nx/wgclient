@@ -1,5 +1,3 @@
-// ToDos:
-//   - Sanitize inputs
 package main
 
 import (
@@ -14,6 +12,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/sendgrid/rest"
 	"gopkg.in/yaml.v3"
 )
@@ -27,44 +26,47 @@ Options:
   -version                       display version information and exit
 `
 
+// validate instance of go-playground validator v10
+var validate *validator.Validate
+
 // Version of this program
 var Version = "v0.1-dev"
 
 // Auth struct for login response
 type Auth struct {
-	SessionID string `json:"sessionID"`
-	Username  string `json:"username"`
-	Givenname string `json:"givenname"`
-	Surname   string `json:"surname"`
+	SessionID string `json:"sessionID" validate:"required,uuid_rfc4122"`
+	Username  string `json:"username" validate:"required,printascii,max=50"`
+	Givenname string `json:"givenname" validate:"required,printascii,max=50"`
+	Surname   string `json:"surname" validate:"required,printascii,max=50"`
 }
 
 // Config struct for configuration file
 type Config struct {
 	Server struct {
-		Host       string `yaml:"host"`
-		Port       string `yaml:"port"`
-		DNS        string `yaml:"dns"`
-		AllowedIPs string `yaml:"allowedIPs"`
+		Host       string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
+		Port       string `yaml:"port" validate:"required,numeric,min=2,max=5"`
+		DNS        string `yaml:"dns" validate:"required,ipv4|ipv6"`
+		AllowedIPs string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
 	} `yaml:"server"`
 	API struct {
-		Host      string `yaml:"host"`
-		User      string `yaml:"user"`
-		Pass      string `yaml:"pass"`
-		BasicUser string `yaml:"basic_user"`
-		BasicPass string `yaml:"basic_pass"`
+		Host      string `yaml:"host" validate:"required,url"`
+		User      string `yaml:"user" validate:"required,printascii,max=50"`
+		Pass      string `yaml:"pass" validate:"required,printascii,max=50"`
+		BasicUser string `yaml:"basic_user" validate:"required,printascii,max=50"`
+		BasicPass string `yaml:"basic_pass" validate:"required,printascii,max=50"`
 	} `yaml:"api"`
 	APIEndpoints struct {
-		SessionCreate string `yaml:"session_create"`
-		KeypairList   string `yaml:"keypair_list"`
+		SessionCreate string `yaml:"session_create" validate:"required,uri"`
+		KeypairList   string `yaml:"keypair_list" validate:"required,uri"`
 	} `yaml:"api_endpoints"`
 }
 
 // Keys struct for holding keypairs
 type Keys []struct {
-	ID         string `json:"_id"`
-	UserID     string `json:"userID"`
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
+	ID        string `json:"_id" validate:"required,hexadecimal,len=24"`
+	UserID    string `json:"userID" validate:"required,printascii"`
+	PublicKey string `json:"publicKey" validate:"required,printascii,len=44"`
+	IPAddr    string `json:"ipaddr" validate:"required,ipv4"`
 }
 
 // basicAuth returns the base64 encoded string of user and pass
@@ -106,13 +108,19 @@ func keypairList(cfg *Config, headers map[string]string, sid string) *Keys {
 	if err != nil {
 		log.Fatalf("ERROR: Response body can not be unmarshalled: %s", err)
 	}
+	for _, v := range keys {
+		err = validate.Struct(v)
+		if err != nil {
+			log.Fatalf("ERROR: Input API validation error: %s", err)
+		}
+	}
 
 	return &keys
 }
 
 // createSession calls the login API process to authenticate and requests the
 // ID for further requests
-func createSession(cfg *Config, headers map[string]string) string {
+func createSession(cfg *Config, headers map[string]string) *Auth {
 	var k Auth
 	// baseURL Buildings
 	baseURL := cfg.API.Host + cfg.APIEndpoints.SessionCreate
@@ -145,8 +153,12 @@ func createSession(cfg *Config, headers map[string]string) string {
 	if err != nil {
 		log.Fatalf("ERROR: Response body can not be unmarshalled: %s", err)
 	}
-	s := k.SessionID
-	return s
+	err = validate.Struct(k)
+	if err != nil {
+		log.Fatalf("ERROR: Input API validation error: %s", err)
+	}
+
+	return &k
 }
 
 func pathExists(path string) bool {
@@ -167,6 +179,10 @@ func readConfig(cfg *Config, config string) {
 		err = decoder.Decode(&cfg)
 		if err != nil {
 			log.Fatalf("ERROR: yaml config has unknown format: %s", err)
+		}
+		err = validate.Struct(cfg)
+		if err != nil {
+			log.Fatalf("ERROR: config validation error: %s", err)
 		}
 	} else {
 		log.Fatalf("ERROR: config file %s does not exist", config)
@@ -202,6 +218,7 @@ func createWgConfig(cfg *Config, keys *Keys) string {
 
 	for _, v := range *keys {
 		buf.WriteString("[Peer]\n")
+		buf.WriteString("# " + v.UserID + "\n")
 		buf.WriteString("PublicKey = " + v.PublicKey + "\n")
 		buf.WriteString("AllowedIPs = " + cfg.Server.DNS + "\n\n")
 	}
@@ -210,6 +227,7 @@ func createWgConfig(cfg *Config, keys *Keys) string {
 }
 
 func main() {
+	validate = validator.New()
 	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	var (
@@ -233,7 +251,6 @@ func main() {
 	// Read config arguments
 	var cfg Config
 	readConfig(&cfg, *configFlag)
-	//fmt.Printf("%+v\n", cfg)
 
 	// headers Basic Auth
 	headers := make(map[string]string)
@@ -241,7 +258,7 @@ func main() {
 
 	// s will be set to session key
 	s := createSession(&cfg, headers)
-	keys := keypairList(&cfg, headers, s)
+	keys := keypairList(&cfg, headers, s.SessionID)
 	wgConfig := createWgConfig(&cfg, keys)
 	writeWgConfig(*wgconfigFlag, wgConfig)
 }
