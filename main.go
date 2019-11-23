@@ -187,9 +187,21 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
+// checkFilePermissions checks the permissions of given files
+func checkFilePermission(path string) bool {
+	info, _ := os.Stat(path)
+	mode := info.Mode()
+	if mode <= 0o600 {
+		return true
+	} else {
+		log.Fatalf("ERROR: File permission to permissive (should be at least 600): %#o", mode)
+		return false
+	}
+}
+
 // readConfig reads the yaml config from given path
 func readConfig(cfg *Config, config string) {
-	if pathExists(config) {
+	if pathExists(config) && checkFilePermission(config) {
 		// Open the config file
 		f, err := os.Open(config)
 		if err != nil {
