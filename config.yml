@@ -15,7 +15,7 @@ api:
   pass: "bar"
   basic_user: "john"
   basic_pass: "doh"
-  query_frequency: 10
+  query_frequency: 10 # in seconds
 
 # API endpoints
 api_endpoints:
