@@ -338,7 +338,7 @@ func main() {
 	defer cntxt.Release()
 
 	log.Print("- - - - - - - - - - - - - - -")
-	log.Print("wgclient daemon started")
+	log.Print("[wgclient daemon started]")
 
 	for {
 		// s will be set to session key
