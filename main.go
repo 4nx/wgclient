@@ -11,16 +11,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/sendgrid/rest"
+	"github.com/sevlyar/go-daemon"
 	"gopkg.in/yaml.v3"
 )
 
 const shortUsage = `Usage: wgclient [OPTION]:
 
 Options:
-  -config=/home/foo/config.yml   configuration file (default: /etc/wgclient/config.yml)
+  -config=/home/foo/config.yml   configuration file (default: /etc/wireguard/config.yml)
   -wgconfig=/opt/wg0.conf        wireguard config file (default: /etc/wireguard/wg0.conf)
   -help                          display this help text and exit
   -version                       display version information and exit
@@ -30,7 +32,7 @@ Options:
 var validate *validator.Validate
 
 // Version of this program
-var version = "v0.1-dev"
+var version = "v0.2-dev"
 
 // Auth struct for login response
 type Auth struct {
@@ -43,17 +45,21 @@ type Auth struct {
 // Config struct for configuration file
 type Config struct {
 	Server struct {
-		Host       string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
-		Port       string `yaml:"port" validate:"required,numeric,min=2,max=5"`
-		DNS        string `yaml:"dns" validate:"required,ipv4|ipv6"`
-		AllowedIPs string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
+		Host         string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
+		Port         string `yaml:"port" validate:"required,numeric,min=2,max=5"`
+		DNS          string `yaml:"dns" validate:"required,ipv4|ipv6"`
+		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
+		PrivateKey   string `yaml:"private_key" validate:"required,file"`
+		PublicKey    string `yaml:"public_key" validate:"required,file`
+		PresharedKey string `yaml:"preshared_key" validate:"required,file"`
 	} `yaml:"server"`
 	API struct {
-		Host      string `yaml:"host" validate:"required,url"`
-		User      string `yaml:"user" validate:"required,printascii,max=50"`
-		Pass      string `yaml:"pass" validate:"required,printascii,max=50"`
-		BasicUser string `yaml:"basic_user" validate:"required,printascii,max=50"`
-		BasicPass string `yaml:"basic_pass" validate:"required,printascii,max=50"`
+		Host           string `yaml:"host" validate:"required,url"`
+		User           string `yaml:"user" validate:"required,printascii,max=50"`
+		Pass           string `yaml:"pass" validate:"required,printascii,max=50"`
+		BasicUser      string `yaml:"basic_user" validate:"required,printascii,max=50"`
+		BasicPass      string `yaml:"basic_pass" validate:"required,printascii,max=50"`
+		QueryFrequency int    `yaml:"query_frequency" validate:"required,numeric,min=4,max=10`
 	} `yaml:"api"`
 	APIEndpoints struct {
 		SessionCreate string `yaml:"session_create" validate:"required,uri"`
@@ -74,6 +80,17 @@ type Keys []struct {
 func basicAuth(user, pass string) string {
 	auth := user + ":" + pass
 	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+// checkFilePermissions checks the permissions of given files
+func checkFilePermission(path string) bool {
+	info, _ := os.Stat(path)
+	mode := info.Mode()
+	if mode <= 0o600 {
+		return true
+	}
+	log.Fatalf("ERROR: File permission to permissive (should be at least 600): %#o", mode)
+	return false
 }
 
 // createSession calls the login API process to authenticate and requests the
@@ -125,7 +142,7 @@ func createWgConfig(cfg *Config, keys *Keys) string {
 	buf.WriteString("[Interface]\n")
 	buf.WriteString("Address = " + cfg.Server.Host + "\n")
 	buf.WriteString("ListenPort = " + string(cfg.Server.Port) + "\n")
-	buf.WriteString("PrivateKey = FILLME\n")
+	buf.WriteString("PrivateKey = " + string(readPrivateKey(cfg.Server.PrivateKey)) + "\n")
 	buf.WriteString("SaveConfig = true\n\n")
 
 	for _, v := range *keys {
@@ -187,18 +204,6 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
-// checkFilePermissions checks the permissions of given files
-func checkFilePermission(path string) bool {
-	info, _ := os.Stat(path)
-	mode := info.Mode()
-	if mode <= 0o600 {
-		return true
-	} else {
-		log.Fatalf("ERROR: File permission to permissive (should be at least 600): %#o", mode)
-		return false
-	}
-}
-
 // readConfig reads the yaml config from given path
 func readConfig(cfg *Config, config string) {
 	if pathExists(config) && checkFilePermission(config) {
@@ -221,6 +226,45 @@ func readConfig(cfg *Config, config string) {
 	} else {
 		log.Fatalf("ERROR: config file %s does not exist", config)
 	}
+}
+
+// readPresharedKey reads the preshared key to write it to wireguard config
+func readPresharedKey(presharedKeyFile string) []byte {
+	// Open the preshared key file
+	f, err := os.Open(presharedKeyFile)
+	if err != nil {
+		log.Fatalf("ERROR: %s", err)
+	}
+	defer f.Close() // f.Close will run when we're finished.
+	p := bufio.NewReader(f)
+	presharedKey, err := p.Peek(44)
+	return presharedKey
+}
+
+// readPrivateKey reads the private key to write it to wireguard config
+func readPrivateKey(privateKeyFile string) []byte {
+	// Open the private key file
+	f, err := os.Open(privateKeyFile)
+	if err != nil {
+		log.Fatalf("ERROR: %s", err)
+	}
+	defer f.Close() // f.Close will run when we're finished.
+	p := bufio.NewReader(f)
+	privateKey, err := p.Peek(44)
+	return privateKey
+}
+
+// readPublicKey reads the public key
+func readPublicKey(publicKeyFile string) []byte {
+	// Open the public key file
+	f, err := os.Open(publicKeyFile)
+	if err != nil {
+		log.Fatalf("ERROR: %s", err)
+	}
+	defer f.Close() // f.Close will run when we're finished.
+	p := bufio.NewReader(f)
+	publicKey, err := p.Peek(44)
+	return publicKey
 }
 
 // writeWgConfig creates the wireguard wg0.conf file
@@ -274,9 +318,34 @@ func main() {
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
 
-	// s will be set to session key
-	s := createSession(&cfg, headers)
-	keys := keypairList(&cfg, headers, s.SessionID)
-	wgConfig := createWgConfig(&cfg, keys)
-	writeWgConfig(*wgconfigFlag, wgConfig)
+	cntxt := &daemon.Context{
+		PidFileName: "wgclient.pid",
+		PidFilePerm: 0644,
+		LogFileName: "wgclient.log",
+		LogFilePerm: 0640,
+		WorkDir:     "./",
+		Umask:       027,
+		Args:        []string{"[go-daemon wgclient]"},
+	}
+
+	d, err := cntxt.Reborn()
+	if err != nil {
+		log.Fatal("Unable to run: ", err)
+	}
+	if d != nil {
+		return
+	}
+	defer cntxt.Release()
+
+	log.Print("- - - - - - - - - - - - - - -")
+	log.Print("wgclient daemon started")
+
+	for {
+		// s will be set to session key
+		s := createSession(&cfg, headers)
+		keys := keypairList(&cfg, headers, s.SessionID)
+		wgConfig := createWgConfig(&cfg, keys)
+		writeWgConfig(*wgconfigFlag, wgConfig)
+		time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
+	}
 }

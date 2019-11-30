@@ -4,6 +4,9 @@ server:
   port: 51820
   dns: "1.1.1.1"
   allowedIPs: "10.0.0.0/20"
+  private_key: "/etc/wireguard/privatekey"
+  public_key: "/etc/wireguard/publickey"
+  preshared_key: "/etc/wireguard/preshared"
 
 # API configuration
 api:
@@ -12,8 +15,9 @@ api:
   pass: "bar"
   basic_user: "john"
   basic_pass: "doh"
+  query_frequency: 10
 
 # API endpoints
 api_endpoints:
   session_create: "/api/session/create"
-  keypair_list: "/api/keypair/list"
+  keypair_list: "/api/keypair/import"
