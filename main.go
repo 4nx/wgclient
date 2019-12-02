@@ -126,22 +126,22 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
     return nil
 	}
 
-  if response.StatusCode == 200 {
-  	err = json.Unmarshal([]byte(response.Body), &k)
-	  if err != nil {
-	  	log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
-      return nil
-	  }
-	  err = validate.Struct(k)
-	  if err != nil {
-	  	log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
-      return nil
-	  }
-	  return &k
-  } else {
-    	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
-    return nil
-  }
+	if response.StatusCode == 200 {
+	err = json.Unmarshal([]byte(response.Body), &k)
+	if err != nil {
+		log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+		return nil
+	}
+	err = validate.Struct(k)
+	if err != nil {
+		log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+		return nil
+	}
+	return &k
+	} else {
+		log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+		return nil
+	}
 }
 
 // createWgConfig builds the configuration string
@@ -185,30 +185,30 @@ func keypairList(id string, cfg *Config, headers map[string]string, sid string) 
 		QueryParams: queryParams,
 	}
 
-  log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
 	response, err := rest.Send(request)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
 	}
 
-  if response.StatusCode == 200 {
-	  err = json.Unmarshal([]byte(response.Body), &keys)
-	  if err != nil {
-	  	log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
-      return nil
-	  }
-	  for _, v := range keys {
-	  	err = validate.Struct(v)
-	  	if err != nil {
-	  	  log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
-        return nil
-	  	}
-	  }
-	  return &keys
-  } else {
-    	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
-    return nil
-  }
+	if response.StatusCode == 200 {
+		err = json.Unmarshal([]byte(response.Body), &keys)
+		if err != nil {
+			log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+			return nil
+		}
+		for _, v := range keys {
+			err = validate.Struct(v)
+			if err != nil {
+				log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+				return nil
+			}
+		}
+		return &keys
+	} else {
+		log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+		return nil
+	}
 }
 
 // pathExists checks if the given file exists
@@ -220,57 +220,57 @@ func pathExists(path string) bool {
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
 	if checkFilePermission(config, 0o600) {
-    	log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
+		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
-    	// Open the config file
+		// Open the config file
 		f, err := os.Open(config)
 		if err != nil {
-      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
 		}
 		defer f.Close() // f.Close will run when we're finished.
 
 		decoder := yaml.NewDecoder(f)
 		err = decoder.Decode(&cfg)
 		if err != nil {
-      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
 		}
 		err = validate.Struct(cfg)
 		if err != nil {
 			log.Fatalf("transaction_id=%s, category=ERROR, message=\"YAML config validation error\", config_file=\"%s\", error_text=\"%s\"", id, config, err)
 		}
 	} else {
-	  	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 600)\", config_file=\"%s\"", id, config)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 600)\", config_file=\"%s\"", id, config)
 	}
 }
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
 	if checkFilePermission(presharedKeyFile, 0o400) {
-    	log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
+		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
 		// Open the preshared key file
-	  	f, err := os.Open(presharedKeyFile)
-	  	if err != nil {
-      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-	  	}
-	  	defer f.Close() // f.Close will run when we're finished.
+		f, err := os.Open(presharedKeyFile)
+		if err != nil {
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
+		}
+		defer f.Close() // f.Close will run when we're finished.
 
-	  	p := bufio.NewReader(f)
-	  	presharedKey, err := p.Peek(44)
-  		if err != nil {
-      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-  		}
-	  	return presharedKey
+		p := bufio.NewReader(f)
+		presharedKey, err := p.Peek(44)
+		if err != nil {
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
+		}
+		return presharedKey
 	} else {
 		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
-    	return nil
+		return nil
 	}
 }
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
 	if checkFilePermission(privateKeyFile, 0o400) {
-    	log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
+		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
 		// Open the private key file
 		f, err := os.Open(privateKeyFile)
@@ -284,28 +284,28 @@ func readPrivateKey(id string, privateKeyFile string) []byte {
 		if err != nil {
 			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
 		}
-	  	return privateKey
+		return privateKey
 	} else {
-	  	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
-    	return nil
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
+		return nil
 	}
 }
 
 // readPublicKey reads the public key
 func readPublicKey(id string, publicKeyFile string) []byte {
-  	log.Printf("transaction_id=%s, category=INFO, message=\"Read public key file\", file=%s", id, publicKeyFile)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Read public key file\", file=%s", id, publicKeyFile)
 
 	// Open the public key file
 	f, err := os.Open(publicKeyFile)
 	if err != nil {
-    log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
 	}
 	defer f.Close() // f.Close will run when we're finished.
 
 	p := bufio.NewReader(f)
 	publicKey, err := p.Peek(44)
 	if err != nil {
-    	log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
 	}
 	return publicKey
 }
@@ -317,7 +317,7 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
 	}
 	defer f.Close() // f.Close will run when we're finished.
-  
+
 	w := bufio.NewWriter(f)
 	_, err = fmt.Fprintf(w, "%s", wgConfigContent)
 	w.Flush()
@@ -384,8 +384,8 @@ func main() {
 		s := createSession(id.String(), &cfg, headers)
 		if s == nil {
 			time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
-		continue
-    	}
+			continue
+		}
 
 		keys := keypairList(id.String(), &cfg, headers, s.SessionID)
 		if keys == nil {
