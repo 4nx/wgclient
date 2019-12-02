@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-  "github.com/google/uuid"
+	"github.com/google/uuid"
 	"github.com/sendgrid/rest"
 	"github.com/sevlyar/go-daemon"
 	"gopkg.in/yaml.v3"
@@ -50,9 +50,9 @@ type Config struct {
 		Port         string `yaml:"port" validate:"required,numeric,min=2,max=5"`
 		DNS          string `yaml:"dns" validate:"required,ipv4|ipv6"`
 		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
-		PrivateKey   string `yaml:"private_key" validate:"required,file"`   //ToDO: more validation
-		PublicKey    string `yaml:"public_key" validate:"required,file"`    //ToDO: more validation
-		PresharedKey string `yaml:"preshared_key" validate:"required,file"` //ToDO: more validation
+		PrivateKey   string `yaml:"private_key" validate:"required,file"`
+		PublicKey    string `yaml:"public_key" validate:"required,file"`
+		PresharedKey string `yaml:"preshared_key" validate:"required,file"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -139,7 +139,7 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 	  }
 	  return &k
   } else {
-    log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+    	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
     return nil
   }
 }
@@ -206,7 +206,7 @@ func keypairList(id string, cfg *Config, headers map[string]string, sid string) 
 	  }
 	  return &keys
   } else {
-    log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+    	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
     return nil
   }
 }
@@ -220,80 +220,80 @@ func pathExists(path string) bool {
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
 	if checkFilePermission(config, 0o600) {
-    log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
+    	log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
-    // Open the config file
+    	// Open the config file
 		f, err := os.Open(config)
 		if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
+      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
 		}
 		defer f.Close() // f.Close will run when we're finished.
 
 		decoder := yaml.NewDecoder(f)
 		err = decoder.Decode(&cfg)
 		if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
+      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
 		}
 		err = validate.Struct(cfg)
 		if err != nil {
 			log.Fatalf("transaction_id=%s, category=ERROR, message=\"YAML config validation error\", config_file=\"%s\", error_text=\"%s\"", id, config, err)
 		}
 	} else {
-	  log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 600)\", config_file=\"%s\"", id, config)
+	  	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 600)\", config_file=\"%s\"", id, config)
 	}
 }
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
 	if checkFilePermission(presharedKeyFile, 0o400) {
-    log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
+    	log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
-	  // Open the preshared key file
-	  f, err := os.Open(presharedKeyFile)
-	  if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-	  }
-	  defer f.Close() // f.Close will run when we're finished.
+		// Open the preshared key file
+	  	f, err := os.Open(presharedKeyFile)
+	  	if err != nil {
+      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
+	  	}
+	  	defer f.Close() // f.Close will run when we're finished.
 
-	  p := bufio.NewReader(f)
-	  presharedKey, err := p.Peek(44)
-  	if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-  	}
-	  return presharedKey
+	  	p := bufio.NewReader(f)
+	  	presharedKey, err := p.Peek(44)
+  		if err != nil {
+      		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
+  		}
+	  	return presharedKey
 	} else {
-	  log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
-    return nil
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
+    	return nil
 	}
 }
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
 	if checkFilePermission(privateKeyFile, 0o400) {
-    log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
+    	log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
-	  // Open the private key file
-	  f, err := os.Open(privateKeyFile)
-	  if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
-	  }
-	  defer f.Close() // f.Close will run when we're finished.
+		// Open the private key file
+		f, err := os.Open(privateKeyFile)
+		if err != nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
+		}
+		defer f.Close() // f.Close will run when we're finished.
 
-	  p := bufio.NewReader(f)
-	  privateKey, err := p.Peek(44)
-  	if err != nil {
-      log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
-  	}
-	  return privateKey
+		p := bufio.NewReader(f)
+		privateKey, err := p.Peek(44)
+		if err != nil {
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
+		}
+	  	return privateKey
 	} else {
-	  log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
-    return nil
+	  	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
+    	return nil
 	}
 }
 
 // readPublicKey reads the public key
 func readPublicKey(id string, publicKeyFile string) []byte {
-  log.Printf("transaction_id=%s, category=INFO, message=\"Read public key file\", file=%s", id, publicKeyFile)
+  	log.Printf("transaction_id=%s, category=INFO, message=\"Read public key file\", file=%s", id, publicKeyFile)
 
 	// Open the public key file
 	f, err := os.Open(publicKeyFile)
@@ -305,22 +305,22 @@ func readPublicKey(id string, publicKeyFile string) []byte {
 	p := bufio.NewReader(f)
 	publicKey, err := p.Peek(44)
 	if err != nil {
-    log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
+    	log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
 	}
 	return publicKey
 }
 
 // writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
-  f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0644)
-  if err != nil {
-    log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
-  }
-  defer f.Close() // f.Close will run when we're finished.
+	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
+	}
+	defer f.Close() // f.Close will run when we're finished.
   
-  w := bufio.NewWriter(f)
-  _, err = fmt.Fprintf(w, "%s", wgConfigContent)
-  w.Flush()
+	w := bufio.NewWriter(f)
+	_, err = fmt.Fprintf(w, "%s", wgConfigContent)
+	w.Flush()
 }
 
 func main() {
@@ -375,23 +375,23 @@ func main() {
 	log.Print("[wgclient daemon started]")
 
 	for {
-    id := uuid.New()
+		id := uuid.New()
 
-	  // read the config file
-    readConfig(id.String(), &cfg, *configFlag)
+		// read the config file
+		readConfig(id.String(), &cfg, *configFlag)
 
-    // s will be set to session key
+		// s will be set to session key
 		s := createSession(id.String(), &cfg, headers)
-    if s == nil {
-		  time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
-      continue
-    }
+		if s == nil {
+			time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
+		continue
+    	}
 
-    keys := keypairList(id.String(), &cfg, headers, s.SessionID)
-    if keys == nil {
-		  time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
-      continue
-    }
+		keys := keypairList(id.String(), &cfg, headers, s.SessionID)
+		if keys == nil {
+			time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
+			continue
+		}
 
 		wgConfig := createWgConfig(id.String(), &cfg, keys)
 		writeWgConfig(id.String(), *wgconfigFlag, wgConfig)
