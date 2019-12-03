@@ -87,7 +87,7 @@ func basicAuth(user, pass string) string {
 func checkFilePermission(path string, fileMode int) bool {
 	info, err := os.Stat(path)
 	if err != nil {
-    log.Fatalf("category=ERROR, message=\"Can not stat file\", file=\"%s\", error_text=\"%s\"", path, err)
+		log.Fatalf("category=ERROR, message=\"Can not stat file\", file=\"%s\", error_text=\"%s\"", path, err)
 	}
 	mode := info.Mode()
 	if mode <= os.FileMode(fileMode) {
@@ -119,11 +119,11 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 		QueryParams: queryParams,
 	}
 
-  log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
 	response, err := rest.Send(request)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
-    return nil
+		return nil
 	}
 
 	if response.StatusCode == 200 {
@@ -146,7 +146,7 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 
 // createWgConfig builds the configuration string
 func createWgConfig(id string, cfg *Config, keys *Keys) string {
-  log.Printf("transaction_id=%s, category=INFO, message=\"Building new wireguard config file\"", id)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Building new wireguard config file\"", id)
 	buf := bytes.Buffer{}
 	buf.WriteString("[Interface]\n")
 	buf.WriteString("Address = " + cfg.Server.Host + "\n")
@@ -219,7 +219,7 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
-	if checkFilePermission(config,0o600) {
+	if checkFilePermission(config, 0o600) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
 		// Open the config file
@@ -245,7 +245,7 @@ func readConfig(id string, cfg *Config, config string) {
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
-	if checkFilePermission(presharedKeyFile,0o400) {
+	if checkFilePermission(presharedKeyFile, 0o400) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
 		// Open the preshared key file
@@ -269,7 +269,7 @@ func readPresharedKey(id string, presharedKeyFile string) []byte {
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
-	if checkFilePermission(privateKeyFile,0o400) {
+	if checkFilePermission(privateKeyFile, 0o400) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
 		// Open the private key file
@@ -312,10 +312,13 @@ func readPublicKey(id string, publicKeyFile string) []byte {
 
 // writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
+	log.Printf("transaction_id=%s, category=INFO, message=\"Write wireguard config file\"", id)
 	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
 	}
+	f.Truncate(0)
+	f.Seek(0,0)
 	defer f.Close() // f.Close will run when we're finished.
 
 	w := bufio.NewWriter(f)
@@ -324,6 +327,33 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 }
 
 func main() {
+	cntxt := &daemon.Context{
+		PidFileName: "wgclient.pid",
+		PidFilePerm: 0644,
+		LogFileName: "wgclient.log",
+		LogFilePerm: 0640,
+		WorkDir:     "./",
+		Umask:       027,
+		Args:        []string{"[go-daemon wgclient]"},
+	}
+
+	d, err := cntxt.Reborn()
+	if err != nil {
+		log.Fatal("Unable to run: ", err)
+	}
+	if d != nil {
+		return
+	}
+	defer cntxt.Release()
+
+	id := uuid.New()
+
+	log.Print("-----------------------------")
+	log.Print("[wgclient daemon started]")
+
+	// Read config arguments
+	var cfg Config
+
 	validate = validator.New()
 	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -345,40 +375,16 @@ func main() {
 		fmt.Println(version)
 		return
 	}
-	// Read config arguments
-	var cfg Config
+
+	// read the config file
+	readConfig(id.String(), &cfg, *configFlag)
 
 	// headers Basic Auth
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
 
-	cntxt := &daemon.Context{
-		PidFileName: "wgclient.pid",
-		PidFilePerm: 0644,
-		LogFileName: "wgclient.log",
-		LogFilePerm: 0640,
-		WorkDir:     "./",
-		Umask:       027,
-		Args:        []string{"[go-daemon wgclient]"},
-	}
-
-	d, err := cntxt.Reborn()
-	if err != nil {
-		log.Fatal("Unable to run: ", err)
-	}
-	if d != nil {
-		return
-	}
-	defer cntxt.Release()
-
-	log.Print("-----------------------------")
-	log.Print("[wgclient daemon started]")
-
 	for {
 		id := uuid.New()
-
-		// read the config file
-		readConfig(id.String(), &cfg, *configFlag)
 
 		// s will be set to session key
 		s := createSession(id.String(), &cfg, headers)
