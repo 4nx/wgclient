@@ -313,7 +313,7 @@ func readPublicKey(id string, publicKeyFile string) []byte {
 // writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 	log.Printf("transaction_id=%s, category=INFO, message=\"Write wireguard config file\"", id)
-	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
 	}
