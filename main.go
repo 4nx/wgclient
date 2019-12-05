@@ -50,9 +50,9 @@ type Config struct {
 		Port         string `yaml:"port" validate:"required,numeric,min=2,max=5"`
 		DNS          string `yaml:"dns" validate:"required,ipv4|ipv6"`
 		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
-		PrivateKey   string `yaml:"private_key" validate:"required,file"`
-		PublicKey    string `yaml:"public_key" validate:"required,file"`
-		PresharedKey string `yaml:"preshared_key" validate:"required,file"`
+		PrivateKey   string `yaml:"private_key" validate:"required,printascii"`
+		PublicKey    string `yaml:"public_key" validate:"required,printascii"`
+		PresharedKey string `yaml:"preshared_key" validate:"required,printascii"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -350,14 +350,13 @@ func main() {
 
 	log.Print("-----------------------------")
 	log.Print("[wgclient daemon started]")
-
+		
 	// Read config arguments
 	var cfg Config
 
 	validate = validator.New()
-	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	var (
+	
+  var (
 		configFlag   = flag.String("config", "config.yml", "")
 		helpFlag     = flag.Bool("help", false, "")
 		versionFlag  = flag.Bool("version", false, "")
@@ -375,10 +374,11 @@ func main() {
 		fmt.Println(version)
 		return
 	}
-
+	
 	// read the config file
 	readConfig(id.String(), &cfg, *configFlag)
 
+	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
 	// headers Basic Auth
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
