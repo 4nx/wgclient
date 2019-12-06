@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -219,7 +218,7 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
-	if checkFilePermission(config, 0o600) {
+	if checkFilePermission(config, 600) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
 		// Open the config file
@@ -245,7 +244,7 @@ func readConfig(id string, cfg *Config, config string) {
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
-	if checkFilePermission(presharedKeyFile, 0o400) {
+	if checkFilePermission(presharedKeyFile, 0400) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
 		// Open the preshared key file
@@ -269,7 +268,7 @@ func readPresharedKey(id string, presharedKeyFile string) []byte {
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
-	if checkFilePermission(privateKeyFile, 0o400) {
+	if checkFilePermission(privateKeyFile, 0400) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
 		// Open the private key file
