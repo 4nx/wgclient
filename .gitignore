@@ -13,3 +13,7 @@
 
 # Ignore build wg0.conf
 wg0.conf
+
+# ignore logs and pids
+*.log
+*.pid
