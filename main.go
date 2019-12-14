@@ -52,8 +52,8 @@ type Config struct {
 		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
 		PrivateKey   string `yaml:"private_key" validate:"required,file"`
 		PublicKey    string `yaml:"public_key" validate:"required,file"`
-        PresharedKey string `yaml:"preshared_key" validate:"required,file"`
-        LogFile      string `yaml:"log_file" validate:"required,file"`
+		PresharedKey string `yaml:"preshared_key" validate:"required,file"`
+		LogFile      string `yaml:"log_file" validate:"required,file"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -366,16 +366,16 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 	w.Flush()
 }
 
-func main() {  
-    var cfg Config
+func main() {
+	var cfg Config
 
-    var (
+	var (
 		configFlag   = flag.String("config", "config.yml", "")
 		helpFlag     = flag.Bool("help", false, "")
 		versionFlag  = flag.Bool("version", false, "")
 		wgconfigFlag = flag.String("wgconfig", "wg0.conf", "")
 	)
-    id := uuid.New()
+	id := uuid.New()
 
 	validate = validator.New()
 	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
@@ -397,7 +397,7 @@ func main() {
 	// read the config file
 	readConfig(id.String(), &cfg, *configFlag)
 
-    cntxt := &daemon.Context{
+	cntxt := &daemon.Context{
 		PidFileName: "wgclient.pid",
 		PidFilePerm: 0644,
 		LogFileName: cfg.Server.LogFile,
