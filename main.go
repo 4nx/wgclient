@@ -86,16 +86,13 @@ func basicAuth(user, pass string) string {
 }
 
 // checkFilePermissions checks the permissions of given files
-func checkFilePermission(path string, fileMode int) bool {
+func getFilePermission(path string) os.FileMode {
 	info, err := os.Stat(path)
 	if err != nil {
 		log.Fatalf("category=ERROR, message=\"Can not stat file\", file=\"%s\", error_text=\"%s\"", path, err)
 	}
-	mode := info.Mode()
-	if mode <= os.FileMode(fileMode) {
-		return true
-	}
-	return false
+    mode := info.Mode()
+    return mode
 }
 
 // createSession calls the login API process to authenticate and requests the
@@ -219,7 +216,8 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
-	if checkFilePermission(config, 0600) {
+    fileMode := getFilePermission(config)
+	if fileMode <= 0600 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
 		// Open the config file
@@ -245,7 +243,8 @@ func readConfig(id string, cfg *Config, config string) {
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
-	if checkFilePermission(presharedKeyFile, 0400) {
+    fileMode := getFilePermission(presharedKeyFile)
+	if fileMode <= 0400 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
 		// Open the preshared key file
@@ -268,7 +267,8 @@ func readPresharedKey(id string, presharedKeyFile string) []byte {
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
-	if checkFilePermission(privateKeyFile, 0400) {
+    fileMode := getFilePermission(privateKeyFile)
+	if fileMode <= 0400 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
 		// Open the private key file
