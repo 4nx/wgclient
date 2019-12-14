@@ -1,22 +1,20 @@
 language: go
 go: stable
-
 script:
-  - go run analysis.go ./...
-  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-linux-amd64"
-        -ldflags "-X main.Version=$(git describe --tags)"
-  - CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o "wgclient-$(git describe --tags)-linux-arm"
-        -ldflags "-X main.Version=$(git describe --tags)"
-  - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-darwin-amd64"
-        -ldflags "-X main.Version=$(git describe --tags)"
-
+- go run analysis.go ./...
+- CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-linux-amd64"
+  -ldflags "-X main.Version=$(git describe --tags)"
+- CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o "wgclient-$(git describe
+  --tags)-linux-arm" -ldflags "-X main.Version=$(git describe --tags)"
+- CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-darwin-amd64"
+  -ldflags "-X main.Version=$(git describe --tags)"
 deploy:
   provider: releases
   skip_cleanup: true
   file_glob: true
-  file: "wgclient-*"
+  file: wgclient-*
   api_key:
-    secure: 2xEYLR2JvvwwyZk2LzDi3k1Eb5EPiJCk8Jx+jHMN4uafho3CyvDcLhTP+ExwF8wKAx4AdLs+8KEPknqb1JiXY1xW4I10QAdV2y/EK+cWncJZSLFicmHzO+phGGRTf1cqCMDBzwuJ3Ovp2bmblZZR3k7o1UgRAtVzrPQFHn06NClRLzb9WpGPCG/QJ4qCGewHgNc0f6U4aZjo8Q+ZlAmMgeTtezEenjDDFsolnpjnV8x7E7kenZgjH0bPcyZnLQCEmVkUmdmHCfboH6Kn8zbXmNeYz4OPGK8qEgWsByjrCsPLRUSDLtgCJjx2gnZGgoDlaBYmBmlSAzkSLnu2eHfV/CiesDo4OpkQSRZJ4B3aHpRC2T+MQpkvVVslREThjAgsxulz/32ILPzhN1b9HUkU4gT86ieEYT1OZQjbeSo1zMMSNc6bvBwacxgkggaL6J7+FE7k/+qmm9hxLiH6v8fNhU8oWFAGxOr4cP7G3hgS6udvQ206UuR5ua5lO6ODbWmqC8UuCY6QHUgOOD4lO2vfLcxiSrHOVQWSWh5zq5wwfjEsvhPx0ip0mHAPr7qsLfvVs2QU4BmETDJhbHp3rKpff8kxxwiOh2Q6JMEbAa9TVenAIhQiVxB0CsHbkORnb9uoGQ5RA3vTTzD6EbvW5vgN95TNwrZ5SSx6G+CsVPNs5Bo=
+    secure: EGuAUVQvICDziWuawgDMYINVaaNuvWmvghcoYasKfIpnk0UrjvmahL1lmYixasLmgD1T/LV6km5ht4epFanXeESfincb5OuSA7yozlycojJj8dftfTkhi5Q5v1EOA+VKzxJbCjbSF1Ih1UlVCfO02Xm2xlggN2AIdfbdsfHGT9+yeYRPDL2wNer1QYw5R1hip1vIT8NWwyNUV00mfd00Y9t+Aa7th33lt8WFK9NhfnlnFbyqFDTJvPHNdNigoDmMk1Q2Cfe+e0iF2c5NpZy76+z6R/Pi1oc4OCakUOiYOwSJLHxHXjNN9vtBwHrh+9S1ps43igRqMUOifONxZj2pIgUj4AWTGVGFziUQWQeVKOV+OXzPI3Ma2aoEKLKpDnyCu7wf2lgEsjuSitmzKBpaX0kcetcpyt8iv50nDw9ypjwR0wweZQ+gXEsy8/49X8hdLHFnpVFObuWGRwSligMmhEuiguzaasWQIYrZKe9JIHBDclX5uxF3H3cQApHl/r+GQKau96k01Fg9OsXhJicD/i6iOO1hjkMaznxbFi+dt8rhT5Ksbqk2iw1Mi8lPcvUxNQpicWIYJ70gfg9RYRgskkbs/9zuL0kYFbsvcPu6L9cTZO4OgyBz8Q7Rv3oZ5zkqkrjC+LjxD8f5PnrHpJ62L9QD8KmZJilJc/rRmCxh5bA=
   on:
     repo: 4nx/wgclient
     tags: true
