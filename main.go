@@ -363,6 +363,7 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 
 	w := bufio.NewWriter(f)
 	_, err = fmt.Fprintf(w, "%s", wgConfigContent)
+	_ = err
 	w.Flush()
 }
 
