@@ -33,7 +33,7 @@ Options:
 var validate *validator.Validate
 
 // Version of this program
-var version = "v0.6"
+var version = "v0.0.1"
 
 // Auth struct for login response
 type Auth struct {
