@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -49,9 +50,10 @@ type Config struct {
 		Port         string `yaml:"port" validate:"required,numeric,min=2,max=5"`
 		DNS          string `yaml:"dns" validate:"required,ipv4|ipv6"`
 		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
-		PrivateKey   string `yaml:"private_key" validate:"required,printascii"`
-		PublicKey    string `yaml:"public_key" validate:"required,printascii"`
-		PresharedKey string `yaml:"preshared_key" validate:"required,printascii"`
+		PrivateKey   string `yaml:"private_key" validate:"required,file"`
+		PublicKey    string `yaml:"public_key" validate:"required,file"`
+        PresharedKey string `yaml:"preshared_key" validate:"required,file"`
+        LogFile      string `yaml:"log_file" validate:"required,file"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -62,8 +64,9 @@ type Config struct {
 		QueryFrequency int    `yaml:"query_frequency" validate:"required,numeric,min=4,max=10"`
 	} `yaml:"api"`
 	APIEndpoints struct {
-		SessionCreate string `yaml:"session_create" validate:"required,uri"`
+		ConfigUpdate  string `yaml:"config_update" validate:"required,uri"`
 		KeypairList   string `yaml:"keypair_list" validate:"required,uri"`
+		SessionCreate string `yaml:"session_create" validate:"required,uri"`
 	} `yaml:"api_endpoints"`
 }
 
@@ -118,7 +121,7 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 		QueryParams: queryParams,
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
 	response, err := rest.Send(request)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
@@ -126,21 +129,20 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 	}
 
 	if response.StatusCode == 200 {
-	err = json.Unmarshal([]byte(response.Body), &k)
-	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
-		return nil
+		err = json.Unmarshal([]byte(response.Body), &k)
+		if err != nil {
+			log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+			return nil
+		}
+		err = validate.Struct(k)
+		if err != nil {
+			log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+			return nil
+		}
+		return &k
 	}
-	err = validate.Struct(k)
-	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
-		return nil
-	}
-	return &k
-	} else {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
-		return nil
-	}
+	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+	return nil
 }
 
 // createWgConfig builds the configuration string
@@ -184,7 +186,7 @@ func keypairList(id string, cfg *Config, headers map[string]string, sid string) 
 		QueryParams: queryParams,
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", request_url=%s", id, baseURL)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
 	response, err := rest.Send(request)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
@@ -204,10 +206,9 @@ func keypairList(id string, cfg *Config, headers map[string]string, sid string) 
 			}
 		}
 		return &keys
-	} else {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status_code=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
-		return nil
 	}
+	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+	return nil
 }
 
 // pathExists checks if the given file exists
@@ -218,7 +219,7 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
-	if checkFilePermission(config, 600) {
+	if checkFilePermission(config, 0600) {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
 		// Open the config file
@@ -260,10 +261,9 @@ func readPresharedKey(id string, presharedKeyFile string) []byte {
 			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
 		}
 		return presharedKey
-	} else {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
-		return nil
 	}
+	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
+	return nil
 }
 
 // readPrivateKey reads the private key to write it to wireguard config
@@ -274,7 +274,7 @@ func readPrivateKey(id string, privateKeyFile string) []byte {
 		// Open the private key file
 		f, err := os.Open(privateKeyFile)
 		if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
 		}
 		defer f.Close() // f.Close will run when we're finished.
 
@@ -284,10 +284,9 @@ func readPrivateKey(id string, privateKeyFile string) []byte {
 			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
 		}
 		return privateKey
-	} else {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
-		return nil
 	}
+	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
+	return nil
 }
 
 // readPublicKey reads the public key
@@ -309,6 +308,48 @@ func readPublicKey(id string, publicKeyFile string) []byte {
 	return publicKey
 }
 
+// sendConfigUpdate will send data like host and port of the wireguard server to the API
+func sendConfigUpdate(id string, cfg Config, headers map[string]string, sid string) {
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send config data to wgportal\"", id)
+
+	// URL Buildings
+	baseURL := cfg.API.Host + cfg.APIEndpoints.ConfigUpdate
+
+	// GET collection
+	method := rest.Post
+
+	// Body struct for config data json
+	type Body struct {
+		Host string
+		Port string
+	}
+
+	// encode json
+	m := Body{cfg.Server.Host, cfg.Server.Port}
+	body, err := json.Marshal(m)
+	if err != nil {
+		log.Printf("transaction_id=%s, category=ERROR message=\"Body can not be marshalled\" error_text=\"%s\"", id, err)
+	}
+
+	queryParams := make(map[string]string)
+	queryParams["sid"] = sid
+
+	request := rest.Request{
+		Method:      method,
+		BaseURL:     baseURL,
+		Headers:     headers,
+		QueryParams: queryParams,
+		Body:        body,
+	}
+
+	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
+	response, err := rest.Send(request)
+	if err != nil {
+		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
+	}
+	_ = response
+}
+
 // writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 	log.Printf("transaction_id=%s, category=INFO, message=\"Write wireguard config file\"", id)
@@ -317,7 +358,7 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
 	}
 	f.Truncate(0)
-	f.Seek(0,0)
+	f.Seek(0, 0)
 	defer f.Close() // f.Close will run when we're finished.
 
 	w := bufio.NewWriter(f)
@@ -325,11 +366,41 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 	w.Flush()
 }
 
-func main() {
-	cntxt := &daemon.Context{
+func main() {  
+    var cfg Config
+
+    var (
+		configFlag   = flag.String("config", "config.yml", "")
+		helpFlag     = flag.Bool("help", false, "")
+		versionFlag  = flag.Bool("version", false, "")
+		wgconfigFlag = flag.String("wgconfig", "wg0.conf", "")
+	)
+    id := uuid.New()
+
+	validate = validator.New()
+	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
+	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	flag.Usage = func() {
+		fmt.Fprint(flag.CommandLine.Output(), shortUsage)
+	}
+	flag.Parse()
+	if *helpFlag {
+		fmt.Fprint(flag.CommandLine.Output(), shortUsage)
+		return
+	}
+	if *versionFlag {
+		fmt.Println(version)
+		return
+	}
+
+	// read the config file
+	readConfig(id.String(), &cfg, *configFlag)
+
+    cntxt := &daemon.Context{
 		PidFileName: "wgclient.pid",
 		PidFilePerm: 0644,
-		LogFileName: "wgclient.log",
+		LogFileName: cfg.Server.LogFile,
 		LogFilePerm: 0640,
 		WorkDir:     "./",
 		Umask:       027,
@@ -345,52 +416,23 @@ func main() {
 	}
 	defer cntxt.Release()
 
-	id := uuid.New()
-
 	log.Print("-----------------------------")
 	log.Print("[wgclient daemon started]")
-		
-	// Read config arguments
-	var cfg Config
-
-	validate = validator.New()
-	
-  var (
-		configFlag   = flag.String("config", "config.yml", "")
-		helpFlag     = flag.Bool("help", false, "")
-		versionFlag  = flag.Bool("version", false, "")
-		wgconfigFlag = flag.String("wgconfig", "wg0.conf", "")
-	)
-	flag.Usage = func() {
-		fmt.Fprint(flag.CommandLine.Output(), shortUsage)
-	}
-	flag.Parse()
-	if *helpFlag {
-		fmt.Fprint(flag.CommandLine.Output(), shortUsage)
-		return
-	}
-	if *versionFlag {
-		fmt.Println(version)
-		return
-	}
-	
-	// read the config file
-	readConfig(id.String(), &cfg, *configFlag)
 
 	// TODO: REMOVE THIS SHIT AS FAST AS POSSIBLE
 	// headers Basic Auth
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
 
+	// s will be set to session key
+	s := createSession(id.String(), &cfg, headers)
+	if s == nil {
+		time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
+		//continue
+	}
+
 	for {
 		id := uuid.New()
-
-		// s will be set to session key
-		s := createSession(id.String(), &cfg, headers)
-		if s == nil {
-			time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
-			continue
-		}
 
 		keys := keypairList(id.String(), &cfg, headers, s.SessionID)
 		if keys == nil {

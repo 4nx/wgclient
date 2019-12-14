@@ -7,6 +7,7 @@ server:
   private_key: "/etc/wireguard/privatekey"
   public_key: "/etc/wireguard/publickey"
   preshared_key: "/etc/wireguard/preshared"
+  log_file: "wgclient.log"
 
 # API configuration
 api:
