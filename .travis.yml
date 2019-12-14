@@ -1,24 +1,21 @@
 language: go
 go: stable
-
 before_install:
-  - go get github.com/mitchellh/gox
-
+- go get github.com/mitchellh/gox
 install:
-  - # skip
-
+- 
 script:
-  - go get -t -v ./...
-  - diff -u <(echo -n) <(gofmt -d .)
-  - go vet $(go list ./... | grep -v /vendor/)
-  - go test -v -race ./...
-  - gox -os="linux darwin" -arch="amd64" -output="wgclient.." -ldflags "-X main.Rev=`git rev-parse --short HEAD`" -verbose ./...
-
+- go get -t -v ./...
+- diff -u <(echo -n) <(gofmt -d .)
+- go vet $(go list ./... | grep -v /vendor/)
+- go test -v -race ./...
+- gox -os="linux darwin" -arch="amd64" -output="wgclient.." -ldflags "-X main.Rev=`git
+  rev-parse --short HEAD`" -verbose ./...
 deploy:
   provider: releases
   skip_cleanup: true
   api_key:
-    secure: "rO8NO/cD02xnkS0ErY36QXRJ4F06ef5LhQXxEt4/cbVjXqmm4oNMV127O/oAshyGNmrQibFRUZUTFf6mtByF8I9plvo4Nb+DIKmOzSexayXLn+H677cSePvRprfo8MSKA23cfEzp5fiYoJ76kGC7eHIqMuoVVoKzNJVw9GTiKKayCyNErlbd6zBPRVd63BEi8zfYq4O9jugoT6rpqIkWB63X+yVnazrETMpGXVVzUlTFpOjzBgn/fBnRfuGwiIMRPM0Y1jh7ZIk4l2C0y5s/0/s+PMslEvFn7rvuerph8wdvwBuMLblNKcBCvnzAE/31yz8N+DoAvM3oHisRBchfOxO+Ym0u048g5g+cGMlAd6W7IGIvKdQJ72YQHiSI0BFtePDIdsUL2Ck9oIVjH9pYJdNQ+Rmp77dsaiZqWkm3Qx9kuly2KYyRoz6Z+VAQZHnFwazh1rFo6rQIfvwpZtECIsD4RhLqTC3sJohXbxHopB293JlHKgg3rScmfmF+TJq/wNtmy6NsdLc3nFGx/EOSKK7WglXCgU8kRbzvOs1lSpCJQnLUJHbOY4NGqMgu5SEzp1gYaGNDYsEcnh3CZ+wl9tAtr/161wPl4vHiWQwuL873UQomSd2m2Uib9Iqz4LV96HUET1R9IEoGjANN8zZlap7091NuXWf4NxlupKPpwAo="  
+    secure: N/ZoYNihff1FNvt9wcA8PEaVg8opBhfLlU75mEt6UZhdUNzgZrAgsvRmC4Xqtze3YfvvQMqaKQwAnM32pcKtcySUSiz6xqJ7LLmsXRzjnUqmM9W+TYox0H6D1Zih4qQo0VMI84paMH7sUqC5CsKc6F3gjCXTgdI4tp9SbD6vXvQ2Dr5efbwUYfgM33FqpKN2psCbNs0jjQ8tHbsBRYx3gaEv1i9sbSx9F0bLOvIAMMH9PCtA+NK2OQuJxosZLC6xHHttoPRljOhLaLEK4iMuOWXZClB9MJG6DJlO3/vBuC9h+rkVPGH8jDAFrvN22mcoE63N+ToVpDNQxRFMy7ng0BoOxtrPCoZS81a+9a/uVhdI0/9plw5Fs0x/Y1qk7J826Ul8La2A5dWUKMpuXjc/wc+v6xKBLsaHDyEY7pDQy3LqpDrswW4dINxXq1Fo4SWMYtSI2ryq1P3ar8JUCjsxoMhIQtIo5TlFwMCchqG7Smg9MSWFNCtNQuFTTVDEtNDi6tjfa3vLEoxb77ybDhNi1Ask5t1qzijm2rAzfhmGJ2WLxAf0gbULEjh0TveF1zc/90UqD6az4jN9nnnadvdkN0MbzpuVxuGQFZaD5zqymGInS8chOE0Yylhkydm/07kfADSARgv9p2Nt/oisJwcC0BZEqvSVRIcvdyVdyG0Q160=
   file:
   - wgclient.darwin.amd64
   - wgclient.linux.amd64
