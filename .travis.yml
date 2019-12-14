@@ -20,5 +20,4 @@ deploy:
   - wgclient.darwin.amd64
   - wgclient.linux.amd64
   on:
-    repo: 4nx/wgclient
     tags: true
