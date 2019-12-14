@@ -25,4 +25,3 @@ deploy:
   on:
     repo: 4nx/wgclient
     tags: true
-    condition: $LATEST = true
