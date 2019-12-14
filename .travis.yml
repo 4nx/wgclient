@@ -1,23 +1,22 @@
 language: go
 go: stable
-before_install:
-- go get github.com/mitchellh/gox
-install:
-- 
+
 script:
-- go get -t -v ./...
-- diff -u <(echo -n) <(gofmt -d .)
-- go vet $(go list ./... | grep -v /vendor/)
-- go test -v -race ./...
-- gox -os="linux darwin" -arch="amd64" -output="wgclient.." -ldflags "-X main.Rev=`git
-  rev-parse --short HEAD`" -verbose ./...
+  - go run analysis.go ./...
+  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-linux-amd64"
+        -ldflags "-X main.Version=$(git describe --tags)"
+  - CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o "wgclient-$(git describe --tags)-linux-arm"
+        -ldflags "-X main.Version=$(git describe --tags)"
+  - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o "wgclient-$(git describe --tags)-darwin-amd64"
+        -ldflags "-X main.Version=$(git describe --tags)"
+
 deploy:
   provider: releases
+  skip_cleanup: true
+  file_glob: true
+  file: "wgclient-*"
   api_key:
     secure: 2xEYLR2JvvwwyZk2LzDi3k1Eb5EPiJCk8Jx+jHMN4uafho3CyvDcLhTP+ExwF8wKAx4AdLs+8KEPknqb1JiXY1xW4I10QAdV2y/EK+cWncJZSLFicmHzO+phGGRTf1cqCMDBzwuJ3Ovp2bmblZZR3k7o1UgRAtVzrPQFHn06NClRLzb9WpGPCG/QJ4qCGewHgNc0f6U4aZjo8Q+ZlAmMgeTtezEenjDDFsolnpjnV8x7E7kenZgjH0bPcyZnLQCEmVkUmdmHCfboH6Kn8zbXmNeYz4OPGK8qEgWsByjrCsPLRUSDLtgCJjx2gnZGgoDlaBYmBmlSAzkSLnu2eHfV/CiesDo4OpkQSRZJ4B3aHpRC2T+MQpkvVVslREThjAgsxulz/32ILPzhN1b9HUkU4gT86ieEYT1OZQjbeSo1zMMSNc6bvBwacxgkggaL6J7+FE7k/+qmm9hxLiH6v8fNhU8oWFAGxOr4cP7G3hgS6udvQ206UuR5ua5lO6ODbWmqC8UuCY6QHUgOOD4lO2vfLcxiSrHOVQWSWh5zq5wwfjEsvhPx0ip0mHAPr7qsLfvVs2QU4BmETDJhbHp3rKpff8kxxwiOh2Q6JMEbAa9TVenAIhQiVxB0CsHbkORnb9uoGQ5RA3vTTzD6EbvW5vgN95TNwrZ5SSx6G+CsVPNs5Bo=
-  skip_cleanup: true
-  file:
-  - wgclient.darwin.amd64
-  - wgclient.linux.amd64
   on:
+    repo: 4nx/wgclient
     tags: true
