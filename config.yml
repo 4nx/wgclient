@@ -20,5 +20,6 @@ api:
 
 # API endpoints
 api_endpoints:
+  config_update: "/api/config/update"
   session_create: "/api/session/create"
   keypair_list: "/api/keypair/import"
