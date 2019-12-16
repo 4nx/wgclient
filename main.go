@@ -321,13 +321,13 @@ func sendConfig(id string, cfg Config, headers map[string]string, sid string) {
 
 	// Body struct for config data json
 	type Body struct {
-		revision         string
-		peernetCidr      string
-		peernetRoutedIPs string
-		wgDNS            string
-		wgHost           string
-		wgPort           string
-		wgPubkey         string
+		Revision   string `json:"revision"`
+		IntAddr    string `json:"peernetCidr"`
+		AllowedIPs string `json:"peernetRoutedIPs"`
+		DNS        string `json:"wgDNS"`
+		Host       string `json:"wgHost"`
+		Port       string `json:"wgPort"`
+		Pubkey     string `json:"wgPubkey"`
 	}
 
 	// Take unix timestamp as revision
