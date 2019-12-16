@@ -46,14 +46,15 @@ type Auth struct {
 // Config struct for configuration file
 type Config struct {
 	Server struct {
-		Host         string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
-		Port         string `yaml:"port" validate:"required,numeric,min=2,max=5"`
-		DNS          string `yaml:"dns" validate:"required,ipv4|ipv6"`
-		AllowedIPs   string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
-		PrivateKey   string `yaml:"private_key" validate:"required,file"`
-		PublicKey    string `yaml:"public_key" validate:"required,file"`
-		PresharedKey string `yaml:"preshared_key" validate:"required,file"`
-		LogFile      string `yaml:"log_file" validate:"required,file"`
+		Host             string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
+		Port             string `yaml:"port" validate:"required,numeric,min=2,max=5"`
+		DNS              string `yaml:"dns" validate:"required,ipv4|ipv6"`
+		InterfaceAddress string `yaml:"interface_address" validate:"required,ipv4|ipv6"`
+		AllowedIPs       string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
+		PrivateKey       string `yaml:"private_key" validate:"required,file"`
+		PublicKey        string `yaml:"public_key" validate:"required,file"`
+		PresharedKey     string `yaml:"preshared_key" validate:"required,file"`
+		LogFile          string `yaml:"log_file" validate:"required,file"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -91,8 +92,8 @@ func getFilePermission(path string) os.FileMode {
 	if err != nil {
 		log.Fatalf("category=ERROR, message=\"Can not stat file\", file=\"%s\", error_text=\"%s\"", path, err)
 	}
-    mode := info.Mode()
-    return mode
+	mode := info.Mode()
+	return mode
 }
 
 // createSession calls the login API process to authenticate and requests the
@@ -216,7 +217,7 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string) {
-    fileMode := getFilePermission(config)
+	fileMode := getFilePermission(config)
 	if fileMode <= 0600 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
 
@@ -243,7 +244,7 @@ func readConfig(id string, cfg *Config, config string) {
 
 // readPresharedKey reads the preshared key to write it to wireguard config
 func readPresharedKey(id string, presharedKeyFile string) []byte {
-    fileMode := getFilePermission(presharedKeyFile)
+	fileMode := getFilePermission(presharedKeyFile)
 	if fileMode <= 0400 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
 
@@ -267,7 +268,7 @@ func readPresharedKey(id string, presharedKeyFile string) []byte {
 
 // readPrivateKey reads the private key to write it to wireguard config
 func readPrivateKey(id string, privateKeyFile string) []byte {
-    fileMode := getFilePermission(privateKeyFile)
+	fileMode := getFilePermission(privateKeyFile)
 	if fileMode <= 0400 {
 		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
 
@@ -308,8 +309,8 @@ func readPublicKey(id string, publicKeyFile string) []byte {
 	return publicKey
 }
 
-// sendConfigUpdate will send data like host and port of the wireguard server to the API
-func sendConfigUpdate(id string, cfg Config, headers map[string]string, sid string) {
+// sendConfig will send data like host and port of the wireguard server to the API
+func sendConfig(id string, cfg Config, headers map[string]string, sid string) {
 	log.Printf("transaction_id=%s, category=INFO, message=\"Send config data to wgportal\"", id)
 
 	// URL Buildings
@@ -320,12 +321,24 @@ func sendConfigUpdate(id string, cfg Config, headers map[string]string, sid stri
 
 	// Body struct for config data json
 	type Body struct {
-		Host string
-		Port string
+		revision         string
+		peernetCidr      string
+		peernetRoutedIPs string
+		wgDNS            string
+		wgHost           string
+		wgPort           string
+		wgPubkey         string
 	}
 
+	// Take unix timestamp as revision
+	now := time.Now()
+	revision := now.Unix()
+
+	// Get public key from file
+	publicKey := string(readPublicKey(id, cfg.Server.PublicKey))
+
 	// encode json
-	m := Body{cfg.Server.Host, cfg.Server.Port}
+	m := Body{string(revision), cfg.Server.InterfaceAddress, cfg.Server.AllowedIPs, cfg.Server.DNS, cfg.Server.Host, cfg.Server.Port, publicKey}
 	body, err := json.Marshal(m)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR message=\"Body can not be marshalled\" error_text=\"%s\"", id, err)
@@ -425,15 +438,15 @@ func main() {
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
 
-	// s will be set to session key
-	s := createSession(id.String(), &cfg, headers)
-	if s == nil {
-		time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
-		//continue
-	}
-
 	for {
 		id := uuid.New()
+
+		// s will be set to session key
+		s := createSession(id.String(), &cfg, headers)
+		if s == nil {
+			time.Sleep(time.Second * time.Duration(cfg.API.QueryFrequency))
+			continue
+		}
 
 		keys := keypairList(id.String(), &cfg, headers, s.SessionID)
 		if keys == nil {

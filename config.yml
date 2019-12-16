@@ -3,6 +3,7 @@ server:
   host: "192.168.1.1"
   port: 51820
   dns: "1.1.1.1"
+  interface_address: "172.16.0.1/24"
   allowedIPs: "10.0.0.0/20"
   private_key: "/etc/wireguard/privatekey"
   public_key: "/etc/wireguard/publickey"
