@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sendgrid/rest"
 	"github.com/sevlyar/go-daemon"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,10 +88,19 @@ func basicAuth(user, pass string) string {
 }
 
 // checkFilePermissions checks the permissions of given files
-func getFilePermission(path string) os.FileMode {
+func getFilePermission(id string, path string) os.FileMode {
+	log.WithFields(log.Fields{
+		"session": id,
+		"file":    path,
+	}).Info("Check file permissions")
+
 	info, err := os.Stat(path)
 	if err != nil {
-		log.Fatalf("category=ERROR, message=\"Can not stat file\", file=\"%s\", error_text=\"%s\"", path, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    path,
+			"error":   err,
+		}).Fatal("Can not stat file")
 	}
 	mode := info.Mode()
 	return mode
@@ -100,6 +109,10 @@ func getFilePermission(path string) os.FileMode {
 // createSession calls the login API process to authenticate and requests the
 // ID for further requests
 func createSession(id string, cfg *Config, headers map[string]string) *Auth {
+	log.WithFields(log.Fields{
+		"session": id,
+	}).Info("Request session key")
+
 	var k Auth
 	// baseURL Buildings
 	baseURL := cfg.API.Host + cfg.APIEndpoints.SessionCreate
@@ -120,33 +133,54 @@ func createSession(id string, cfg *Config, headers map[string]string) *Auth {
 		QueryParams: queryParams,
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
+	log.WithFields(log.Fields{
+		"session": id,
+		"url":     baseURL,
+		"method":  method,
+	}).Info("Sending request")
+
 	response, err := rest.Send(request)
 	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"error":   err,
+		}).Error("Request failed")
 		return nil
 	}
 
 	if response.StatusCode == 200 {
 		err = json.Unmarshal([]byte(response.Body), &k)
 		if err != nil {
-			log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   err,
+			}).Error("Response body could not be unmarshalled")
 			return nil
 		}
 		err = validate.Struct(k)
 		if err != nil {
-			log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   err,
+			}).Error("Input API validation error")
 			return nil
 		}
 		return &k
 	}
-	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+	log.WithFields(log.Fields{
+		"session": id,
+		"status":  response.StatusCode,
+		"error":   http.StatusText(response.StatusCode),
+	}).Error("Service not available")
 	return nil
 }
 
 // createWgConfig builds the configuration string
 func createWgConfig(id string, cfg *Config, keys *Keys) string {
-	log.Printf("transaction_id=%s, category=INFO, message=\"Building new wireguard config file\"", id)
+	log.WithFields(log.Fields{
+		"session": id,
+	}).Info("Building new wireguard config file")
+
 	buf := bytes.Buffer{}
 	buf.WriteString("[Interface]\n")
 	buf.WriteString("Address = " + cfg.Server.Host + "\n")
@@ -166,6 +200,10 @@ func createWgConfig(id string, cfg *Config, keys *Keys) string {
 
 // keypairList requests all wireguard public keys from the API
 func keypairList(id string, cfg *Config, headers map[string]string, sid string) *Keys {
+	log.WithFields(log.Fields{
+		"session": id,
+	}).Info("Request keypair list")
+
 	// Variable for the Keys struct
 	var keys Keys
 
@@ -185,28 +223,46 @@ func keypairList(id string, cfg *Config, headers map[string]string, sid string) 
 		QueryParams: queryParams,
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
+	log.WithFields(log.Fields{
+		"session": id,
+		"url":     baseURL,
+		"method":  method,
+	}).Info("Sending request")
+
 	response, err := rest.Send(request)
 	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"error":   err,
+		}).Error("Request failed")
 	}
 
 	if response.StatusCode == 200 {
 		err = json.Unmarshal([]byte(response.Body), &keys)
 		if err != nil {
-			log.Printf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   err,
+			}).Error("Response body could not be unmarshalled")
 			return nil
 		}
 		for _, v := range keys {
 			err = validate.Struct(v)
 			if err != nil {
-				log.Printf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+				log.WithFields(log.Fields{
+					"session": id,
+					"error":   err,
+				}).Error("Input API validation error")
 				return nil
 			}
 		}
 		return &keys
 	}
-	log.Printf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+	log.WithFields(log.Fields{
+		"session": id,
+		"status":  response.StatusCode,
+		"error":   http.StatusText(response.StatusCode),
+	}).Error("Service not available")
 	return nil
 }
 
@@ -218,55 +274,91 @@ func pathExists(path string) bool {
 
 // readConfig reads the yaml config from given path
 func readConfig(id string, cfg *Config, config string, mode os.FileMode) {
-	fileMode := getFilePermission(config)
+	log.WithFields(log.Fields{
+		"session": id,
+		"file":    config,
+	}).Info("Read config file")
+
+	fileMode := getFilePermission(id, config)
 	if fileMode > mode {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least %s)\", config_file=\"%s\"", id, mode.String(), config)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    config,
+		}).Fatalf("File permission to permissive (should be at least %s)", mode.String())
 	}
 	// Open the config file
 	f, err := os.Open(config)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    config,
+			"error":   err,
+		}).Fatal("Can not open config file")
 	}
 	defer f.Close() // f.Close will run when we're finished.
 
 	decoder := yaml.NewDecoder(f)
 	err = decoder.Decode(&cfg)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    config,
+			"error":   err,
+		}).Fatal("Can not read YAML config file")
 	}
 	err = validate.Struct(cfg)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"YAML config validation error\", config_file=\"%s\", error_text=\"%s\"", id, config, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    config,
+			"error":   err,
+		}).Fatal("YAML config validation error")
 	}
 }
 
 // readKey reads all kind of wireguard keys (public, private, preshared) from files and returns it
 func readKey(id string, keyFile string, mode os.FileMode) []byte {
-	fileMode := getFilePermission(keyFile)
+	log.WithFields(log.Fields{
+		"session": id,
+		"file":    keyFile,
+	}).Info("Read key file")
+
+	fileMode := getFilePermission(id, keyFile)
 	if fileMode > mode {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least %s)\", file=%s", id, mode.String(), keyFile)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    keyFile,
+		}).Fatalf("File permission to permissive (should be at least %s)", mode.String())
 		return nil
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Read key file\", file=%s", id, keyFile)
-
 	f, err := os.Open(keyFile)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open key file\" file=%s, error_text=\"%s\"", id, keyFile, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    keyFile,
+			"error":   err,
+		}).Fatal("Can not open key file")
 	}
 	defer f.Close()
 
 	p := bufio.NewReader(f)
 	k, err := p.Peek(44)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read key file\" file=%s, error_text=\"%s\"", id, keyFile, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    keyFile,
+			"error":   err,
+		}).Fatal("Can not read key file")
 	}
 	return k
 }
 
 // sendConfig will send informations like host, port etc of the wireguard server to the API
 func sendConfig(id string, cfg Config, headers map[string]string) {
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send config data to wgportal\"", id)
+	log.WithFields(log.Fields{
+		"session": id,
+	}).Info("Send config data to wgportal")
 
 	// URL Buildings
 	baseURL := cfg.API.Host + cfg.APIEndpoints.ConfigUpdate
@@ -305,13 +397,18 @@ func sendConfig(id string, cfg Config, headers map[string]string) {
 	m := Body{revision, cfg.Server.InterfaceAddress, cfg.Server.AllowedIPs, cfg.Server.DNS, host, publicKey}
 	body, err := json.Marshal(m)
 	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR message=\"Body can not be marshalled\" error_text=\"%s\"", id, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"error":   err,
+		}).Fatal("Body can not be marshalled")
 	}
 
 	// sid will be set to session key
 	sid := createSession(id, &cfg, headers)
 	if sid == nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Session create failed\"", id)
+		log.WithFields(log.Fields{
+			"session": id,
+		}).Fatal("Session creation failed")
 	}
 
 	queryParams := make(map[string]string)
@@ -325,35 +422,63 @@ func sendConfig(id string, cfg Config, headers map[string]string) {
 		Body:        body,
 	}
 
-	log.Printf("transaction_id=%s, category=INFO, message=\"Send request\", url=%s, http_method=%s", id, baseURL, method)
+	log.WithFields(log.Fields{
+		"session": id,
+		"url":     baseURL,
+		"method":  method,
+	}).Info("Sending request")
+
 	response, err := rest.Send(request)
 	if err != nil {
-		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"error":   err,
+		}).Error("Request failed")
 	}
 
 	if response.StatusCode == 200 {
 		err = json.Unmarshal([]byte(response.Body), &r)
 		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   err,
+			}).Fatalf("Response body could not be unmarshalled")
 		}
 		err = validate.Struct(r)
 		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   err,
+			}).Fatal("Input API validation error")
 		}
 		if r.Result != "success" {
-			log.Fatalf("transaction_id=%s, category=ERROR message=\"Response was not successful\" error_text=\"%s\"", id, r.Result)
+			log.WithFields(log.Fields{
+				"session": id,
+				"error":   r.Result,
+			}).Fatal("Request result unsuccessful")
 		}
 	} else {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+		log.WithFields(log.Fields{
+			"session": id,
+			"status":  response.StatusCode,
+			"error":   http.StatusText(response.StatusCode),
+		}).Fatal("Service not available")
 	}
 }
 
 // writeWgConfig creates the wireguard wg0.conf file
 func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
-	log.Printf("transaction_id=%s, category=INFO, message=\"Write wireguard config file\"", id)
+	log.WithFields(log.Fields{
+		"session": id,
+	}).Info("Write wireguard config file")
+
 	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\", file=%s, error_text=\"%s\"", id, wgConfig, err)
+		log.WithFields(log.Fields{
+			"session": id,
+			"file":    wgConfig,
+			"error":   err,
+		}).Fatal("Can not open wireguard config file")
 	}
 	f.Truncate(0)
 	f.Seek(0, 0)
