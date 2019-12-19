@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -49,12 +50,12 @@ type Config struct {
 		Host             string `yaml:"host" validate:"required,ipv4|ipv6|hostname|fqdn"`
 		Port             string `yaml:"port" validate:"required,numeric,min=2,max=5"`
 		DNS              string `yaml:"dns" validate:"required,ipv4|ipv6"`
-		InterfaceAddress string `yaml:"interface_address" validate:"required,ipv4|ipv6"`
+		InterfaceAddress string `yaml:"interface_address" validate:"required,cidrv4|cidrv6"`
 		AllowedIPs       string `yaml:"allowedIPs" validate:"required,ipv4|ipv6|cidrv4|cidrv6"`
-		PrivateKey       string `yaml:"private_key" validate:"required,file"`
-		PublicKey        string `yaml:"public_key" validate:"required,file"`
-		PresharedKey     string `yaml:"preshared_key" validate:"required,file"`
-		LogFile          string `yaml:"log_file" validate:"required,file"`
+		PrivateKey       string `yaml:"private_key" validate:"required"`
+		PublicKey        string `yaml:"public_key" validate:"required"`
+		PresharedKey     string `yaml:"preshared_key" validate:"required"`
+		LogFile          string `yaml:"log_file" validate:"required"`
 	} `yaml:"server"`
 	API struct {
 		Host           string `yaml:"host" validate:"required,url"`
@@ -150,7 +151,7 @@ func createWgConfig(id string, cfg *Config, keys *Keys) string {
 	buf.WriteString("[Interface]\n")
 	buf.WriteString("Address = " + cfg.Server.Host + "\n")
 	buf.WriteString("ListenPort = " + string(cfg.Server.Port) + "\n")
-	buf.WriteString("PrivateKey = " + string(readPrivateKey(id, cfg.Server.PrivateKey)) + "\n")
+	buf.WriteString("PrivateKey = " + string(readKey(id, cfg.Server.PrivateKey, os.FileMode(0400))) + "\n")
 	buf.WriteString("SaveConfig = true\n\n")
 
 	for _, v := range *keys {
@@ -219,8 +220,6 @@ func pathExists(path string) bool {
 func readConfig(id string, cfg *Config, config string) {
 	fileMode := getFilePermission(config)
 	if fileMode <= 0600 {
-		log.Printf("transaction_id=%s, category=INFO, message=\"Read config file\" config_file=\"%s\"", id, config)
-
 		// Open the config file
 		f, err := os.Open(config)
 		if err != nil {
@@ -242,75 +241,32 @@ func readConfig(id string, cfg *Config, config string) {
 	}
 }
 
-// readPresharedKey reads the preshared key to write it to wireguard config
-func readPresharedKey(id string, presharedKeyFile string) []byte {
-	fileMode := getFilePermission(presharedKeyFile)
-	if fileMode <= 0400 {
-		log.Printf("transaction_id=%s, category=INFO, message=\"Read preshared key file\", file=%s", id, presharedKeyFile)
-
-		// Open the preshared key file
-		f, err := os.Open(presharedKeyFile)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-		}
-		defer f.Close() // f.Close will run when we're finished.
-
-		p := bufio.NewReader(f)
-		presharedKey, err := p.Peek(44)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read preshared key file\" file=%s, error_text=\"%s\"", id, presharedKeyFile, err)
-		}
-		return presharedKey
+// readKey reads all kind of wireguard keys (public, private, preshared) from files and returns it
+func readKey(id string, keyFile string, mode os.FileMode) []byte {
+	fileMode := getFilePermission(keyFile)
+	if fileMode > mode {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least %s)\", file=%s", id, mode.String(), keyFile)
+		return nil
 	}
-	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, presharedKeyFile)
-	return nil
-}
 
-// readPrivateKey reads the private key to write it to wireguard config
-func readPrivateKey(id string, privateKeyFile string) []byte {
-	fileMode := getFilePermission(privateKeyFile)
-	if fileMode <= 0400 {
-		log.Printf("transaction_id=%s, category=INFO, message=\"Read private key file\", file=%s", id, privateKeyFile)
+	log.Printf("transaction_id=%s, category=INFO, message=\"Read key file\", file=%s", id, keyFile)
 
-		// Open the private key file
-		f, err := os.Open(privateKeyFile)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
-		}
-		defer f.Close() // f.Close will run when we're finished.
-
-		p := bufio.NewReader(f)
-		privateKey, err := p.Peek(44)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read private key file\" file=%s, error_text=\"%s\"", id, privateKeyFile, err)
-		}
-		return privateKey
-	}
-	log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 400)\", file=%s", id, privateKeyFile)
-	return nil
-}
-
-// readPublicKey reads the public key
-func readPublicKey(id string, publicKeyFile string) []byte {
-	log.Printf("transaction_id=%s, category=INFO, message=\"Read public key file\", file=%s", id, publicKeyFile)
-
-	// Open the public key file
-	f, err := os.Open(publicKeyFile)
+	f, err := os.Open(keyFile)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open key file\" file=%s, error_text=\"%s\"", id, keyFile, err)
 	}
-	defer f.Close() // f.Close will run when we're finished.
+	defer f.Close()
 
 	p := bufio.NewReader(f)
-	publicKey, err := p.Peek(44)
+	k, err := p.Peek(44)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read public key file\" file=%s, error_text=\"%s\"", id, publicKeyFile, err)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read key file\" file=%s, error_text=\"%s\"", id, keyFile, err)
 	}
-	return publicKey
+	return k
 }
 
-// sendConfig will send data like host and port of the wireguard server to the API
-func sendConfig(id string, cfg Config, headers map[string]string, sid string) {
+// sendConfig will send informations like host, port etc of the wireguard server to the API
+func sendConfig(id string, cfg Config, headers map[string]string) {
 	log.Printf("transaction_id=%s, category=INFO, message=\"Send config data to wgportal\"", id)
 
 	// URL Buildings
@@ -321,31 +277,39 @@ func sendConfig(id string, cfg Config, headers map[string]string, sid string) {
 
 	// Body struct for config data json
 	type Body struct {
-		Revision   string `json:"revision"`
-		IntAddr    string `json:"peernetCidr"`
-		AllowedIPs string `json:"peernetRoutedIPs"`
-		DNS        string `json:"wgDNS"`
-		Host       string `json:"wgHost"`
-		Port       string `json:"wgPort"`
-		Pubkey     string `json:"wgPubkey"`
+		Revision         string `json:"revision"`
+		PeernetCidr      string `json:"peernetCidr"`
+		PeernetRoutedIPs string `json:"peernetRoutedIPs"`
+		WgDNS            string `json:"wgDNS"`
+		WgHost           string `json:"wgHost"`
+		WgPubkey         string `json:"wgPubkey"`
 	}
 
 	// Take unix timestamp as revision
 	now := time.Now()
-	revision := now.Unix()
+	revision := strconv.FormatInt(now.Unix(), 10)
 
 	// Get public key from file
-	publicKey := string(readPublicKey(id, cfg.Server.PublicKey))
+	publicKey := string(readKey(id, cfg.Server.PublicKey, os.FileMode(0644)))
+
+	// API need host and port combination
+	host := cfg.Server.Host + ":" + cfg.Server.Port
 
 	// encode json
-	m := Body{string(revision), cfg.Server.InterfaceAddress, cfg.Server.AllowedIPs, cfg.Server.DNS, cfg.Server.Host, cfg.Server.Port, publicKey}
+	m := Body{revision, cfg.Server.InterfaceAddress, cfg.Server.AllowedIPs, cfg.Server.DNS, host, publicKey}
 	body, err := json.Marshal(m)
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR message=\"Body can not be marshalled\" error_text=\"%s\"", id, err)
 	}
 
+	// sid will be set to session key
+	sid := createSession(id, &cfg, headers)
+	if sid == nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Session create failed\"", id)
+	}
+
 	queryParams := make(map[string]string)
-	queryParams["sid"] = sid
+	queryParams["sid"] = sid.SessionID
 
 	request := rest.Request{
 		Method:      method,
@@ -360,7 +324,7 @@ func sendConfig(id string, cfg Config, headers map[string]string, sid string) {
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
 	}
-	_ = response
+	fmt.Println(response.Body)
 }
 
 // writeWgConfig creates the wireguard wg0.conf file
@@ -368,7 +332,7 @@ func writeWgConfig(id string, wgConfig string, wgConfigContent string) {
 	log.Printf("transaction_id=%s, category=INFO, message=\"Write wireguard config file\"", id)
 	f, err := os.OpenFile(wgConfig, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\" file=%s, error_text=\"%s\"", id, wgConfig, err)
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open wireguard config file\", file=%s, error_text=\"%s\"", id, wgConfig, err)
 	}
 	f.Truncate(0)
 	f.Seek(0, 0)
@@ -437,6 +401,8 @@ func main() {
 	// headers Basic Auth
 	headers := make(map[string]string)
 	headers["Authorization"] = "Basic " + basicAuth(cfg.API.BasicUser, cfg.API.BasicPass)
+
+	sendConfig(id.String(), cfg, headers)
 
 	for {
 		id := uuid.New()
