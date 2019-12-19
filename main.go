@@ -217,27 +217,26 @@ func pathExists(path string) bool {
 }
 
 // readConfig reads the yaml config from given path
-func readConfig(id string, cfg *Config, config string) {
+func readConfig(id string, cfg *Config, config string, mode os.FileMode) {
 	fileMode := getFilePermission(config)
-	if fileMode <= 0600 {
-		// Open the config file
-		f, err := os.Open(config)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
-		}
-		defer f.Close() // f.Close will run when we're finished.
+	if fileMode > mode {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least %s)\", config_file=\"%s\"", id, mode.String(), config)
+	}
+	// Open the config file
+	f, err := os.Open(config)
+	if err != nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not open config file\" config_file=\"%s\", error_text=\"%s\"", id, config, err)
+	}
+	defer f.Close() // f.Close will run when we're finished.
 
-		decoder := yaml.NewDecoder(f)
-		err = decoder.Decode(&cfg)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
-		}
-		err = validate.Struct(cfg)
-		if err != nil {
-			log.Fatalf("transaction_id=%s, category=ERROR, message=\"YAML config validation error\", config_file=\"%s\", error_text=\"%s\"", id, config, err)
-		}
-	} else {
-		log.Fatalf("transaction_id=%s, category=ERROR, message=\"File permission to permissive (should be at least 600)\", config_file=\"%s\"", id, config)
+	decoder := yaml.NewDecoder(f)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Can not read yaml config file\", config_file=\"%s\" error_text=\"%s\"", id, config, err)
+	}
+	err = validate.Struct(cfg)
+	if err != nil {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"YAML config validation error\", config_file=\"%s\", error_text=\"%s\"", id, config, err)
 	}
 }
 
@@ -285,6 +284,13 @@ func sendConfig(id string, cfg Config, headers map[string]string) {
 		WgPubkey         string `json:"wgPubkey"`
 	}
 
+	// Result struct for responses
+	type Result struct {
+		Result string `json:"result" validate:"required,printascii"`
+	}
+
+	var r Result
+
 	// Take unix timestamp as revision
 	now := time.Now()
 	revision := strconv.FormatInt(now.Unix(), 10)
@@ -324,7 +330,22 @@ func sendConfig(id string, cfg Config, headers map[string]string) {
 	if err != nil {
 		log.Printf("transaction_id=%s, category=ERROR, message=\"Request failed\", error_text=\"%s\"", id, err)
 	}
-	fmt.Println(response.Body)
+
+	if response.StatusCode == 200 {
+		err = json.Unmarshal([]byte(response.Body), &r)
+		if err != nil {
+			log.Fatalf("transaction_id=%s, category=ERROR message=\"Response body can not be unmarshalled\" error_text=\"%s\"", id, err)
+		}
+		err = validate.Struct(r)
+		if err != nil {
+			log.Fatalf("transaction_id=%s, category=ERROR, message=\"Input API validation error\", error_text=\"%s\"", id, err)
+		}
+		if r.Result != "success" {
+			log.Fatalf("transaction_id=%s, category=ERROR message=\"Response was not successful\" error_text=\"%s\"", id, r.Result)
+		}
+	} else {
+		log.Fatalf("transaction_id=%s, category=ERROR, message=\"Service is not available\", status=%d, status_text=\"%s\"", id, response.StatusCode, http.StatusText(response.StatusCode))
+	}
 }
 
 // writeWgConfig creates the wireguard wg0.conf file
@@ -373,7 +394,7 @@ func main() {
 	}
 
 	// read the config file
-	readConfig(id.String(), &cfg, *configFlag)
+	readConfig(id.String(), &cfg, *configFlag, os.FileMode(0600))
 
 	cntxt := &daemon.Context{
 		PidFileName: "wgclient.pid",
